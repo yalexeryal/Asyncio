@@ -1,23 +1,31 @@
-import asyncio
 import aiohttp
+import asyncio
 import time
+from more_itertools import chunked
+
+from typing import Iterable
+
+BOTLE_NECK = 10
 
 
-async def get_person(person_id: int) -> dict:
-    session = aiohttp.client.ClientSession()
-    response = await session.get(f"https://swapi.dev/api/people/{person_id}")
-    json_response = await response.json()
-    await session.close()
-    return json_response
+async def get_persons(session: aiohttp.client.ClientSession(), range_person_id: Iterable[int]):
+    for person_id_chank in chunked(range(1, 110), BOTLE_NECK):
+        get_person_tasks = [asyncio.create_task(get_person(session, person_id)) for person_id in person_id_chank]
+        persons = await asyncio.gether(*get_person_tasks)
+        for person in persons:
+            yield person
+
+
+async def get_person(session: aiohttp.client.ClientSession, person_id: int) -> dict:
+    async with session.get(f"https://swapi.dev/api/people/{person_id}") as response:
+        response_json = await response.json()
+        return response_json
 
 
 async def main():
-    get_person_coroutimes = []
-    for person_id in range(1, 110):
-        get_person_coro = await get_person(person_id)
-        get_person_coroutimes.append(get_person_coro)
-    persons = await asyncio.gather(*get_person_coroutimes)
-    print(persons)
+    async with aiohttp.client.ClientSession() as session:
+        async for person in get_persons(session, range(1, 100)):
+            print(person)
 
 
 stat = time.time()
